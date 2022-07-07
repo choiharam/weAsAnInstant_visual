@@ -1,0 +1,4 @@
+ofxAutoReloadedShader
+ofxOsc
+ofxPingPong
+ofxTextureRecorder
