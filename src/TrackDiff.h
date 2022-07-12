@@ -10,16 +10,10 @@ public:
     glm::vec2 update(ofPixels source);
     void draw();
     
-    float threshold;
     ofxCv::ContourFinder contourFinder;
-    
-    int currentCount;
-    int prevCount;
-    int newCount;
-    int deadCount;
-    int totalCount=0;
-    string counts;
     vector<glm::vec2> poses;
+    float areaSum;
+    
 };
 
 
@@ -31,15 +25,11 @@ public:
     void draw();
         
     float width, height;
-    ofxAutoReloadedShader shader;
-    ofPlanePrimitive plane;
     
     
     ofPixels rawpx;
     ofPixels bgPx;
     ofPixels diffPx;
-    ofFbo bgFbo;
-    ofFbo diffFbo;
     Track track;
     float colorRatio=0;
     glm::vec2 centroid;
