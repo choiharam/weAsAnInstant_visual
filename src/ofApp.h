@@ -2,14 +2,16 @@
 
 #include "ofMain.h"
 #include "ofxOsc.h"
+#include "ofxThreadedImageLoader.h"
 #include "ofxAutoReloadedShader.h"
 #include "ofxTextureRecorder.h"
 #include "Ghost.h"
+#include "TrackDiff.h"
+#include "Feedback.h"
 #include "ThreadedLoadPrepare.h"
 #define rPORT 12345
 #define sPORT 54321
-#define vPORT 9999
-#define ADDRESS "192.168.29.157"
+#define ADDRESS "localhost"
 
 
 class ofApp : public ofBaseApp{
@@ -20,16 +22,7 @@ class ofApp : public ofBaseApp{
 		void draw();
 
 		void keyPressed(int key);
-		void keyReleased(int key);
-		void mouseMoved(int x, int y );
-		void mouseDragged(int x, int y, int button);
-		void mousePressed(int x, int y, int button);
-		void mouseReleased(int x, int y, int button);
-		void mouseEntered(int x, int y);
-		void mouseExited(int x, int y);
 		void windowResized(int w, int h);
-		void dragEvent(ofDragInfo dragInfo);
-		void gotMessage(ofMessage msg);
         void randomTrigger();
         void oscReceive();
         int getVideoDeviceByKeyword(ofVideoGrabber vid, string keyword, string second="-1");
@@ -47,6 +40,8 @@ class ofApp : public ofBaseApp{
         ofFbo videoFbo;
         ofPlanePrimitive plane;
         ofxAutoReloadedShader ghostShader;
+        Feedback mainFeedback;
+    
         ofFbo ghostFbo;
         glm::vec2 scaleRatio;
         float colorRatio;
@@ -61,30 +56,39 @@ class ofApp : public ofBaseApp{
         float prevTime, delay=1;
      
         ofxOscReceiver receiver;
-        ofxOscReceiver vReceiver;
         ofxOscSender sender;
+    
+            // Diff analysis
+        Diff diff;
+    ofFbo verySmallVideoFbo;
+    glm::vec2 verySmallRatio;
 
         
 
-        // video fps measure
-    float prevT=0;
-    float videoFps=0;
+            // video fps measure
+        float prevT=0;
+        float videoFps=0;
+        
+            // recording stuff
+        ofxTextureRecorder recorder;
+        bool brecord=false;
+        int recordFrameCount=0;
+        int recordStartFrame=0;
+        int recordingFrameIdx=0;
+        ofJson dataToSave;
+        
+            // loadingStuff
+        bool bload=false;
+        vector<string> framesToLoad;
+        ofJson infoToLoad;
+        int currentLoadFrameIdx=0;
+        ThreadedPrepare threadedLoadPrep;
+        ofxThreadedImageLoader thLoader;
+        ofImage loadingImg;
     
-        // recording stuff
-    ofxTextureRecorder recorder;
-    bool brecord=false;
-    int recordFrameCount=0;
-    int recordStartFrame=0;
-    int recordingFrameIdx=0;
-    ofJson dataToSave;
     
-        // loadingStuff
-    bool bload=false;
-    vector<string> framesToLoad;
-    ofJson infoToLoad;
-    int currentLoadFrameIdx=0;
-    ThreadedPrepare threadedLoadPrep;
+            // Testing vars
+    ofFbo testInput;
     
-    
-    int testIdx=0;
+
 };

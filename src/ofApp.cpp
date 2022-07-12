@@ -16,26 +16,24 @@ void ofApp::setup(){
     video.setDeviceID(getVideoDeviceByKeyword(video, "brio", "built"));
     video.setDesiredFrameRate(60);
     video.setup(1920,1080, true);
-    videoFbo.allocate(1920,1080,GL_RGBA);
-    videoFbo.getTexture().enableMipmap();
-    videoFbo.getTexture().setTextureMinMagFilter(GL_LINEAR, GL_LINEAR);
+    mainFeedback.setup(1920, 1080);
     
     smallVideoSize = {960, 540};
     smallVideoFbo.allocate(smallVideoSize.x, smallVideoSize.y, GL_RGBA);
+    smallVideoFbo.begin(); ofClear(0,0,0,0); smallVideoFbo.end();
     Ghost::setup(smallVideoFbo.getTexture());
-    plane.set(width,height,2,2);
-    plane.mapTexCoords(0, 0, width, height);
-    plane.setPosition(width/2, height/2, 0);
-    ghostShader.load("shaders/ghost");
-    ghostFbo.allocate(width, height, GL_RGBA);
-    ghostFbo.getTexture().disableMipmap();
-    ghostFbo.getTexture().getTextureData().bFlipTexture=true;
+
+
     scaleRatio.x = smallVideoSize.x / video.getWidth();
     scaleRatio.y = smallVideoSize.y / video.getHeight();
     receiver.setup(rPORT);
-    vReceiver.setup(vPORT);
     sender.setup(ADDRESS, sPORT);
     
+        // diff analysis
+    verySmallVideoFbo.allocate(480, 270, GL_RGBA);
+    verySmallRatio.x = verySmallVideoFbo.getWidth() / video.getWidth();
+    verySmallRatio.y = verySmallVideoFbo.getHeight() / video.getHeight();
+    diff.setup(verySmallVideoFbo.getWidth(), verySmallVideoFbo.getHeight(), verySmallVideoFbo.getTexture());
     
         // recording stuff
     ofxTextureRecorder::Settings settings(smallVideoFbo.getTexture());
@@ -44,24 +42,59 @@ void ofApp::setup(){
     settings.maxMemoryUsage = 9000000000;
     settings.folderPath="";
     recorder.setup(settings);
+    
+    
+            // testing stuff
+    testInput.allocate(1920, 1080, GL_RGBA);
+    testInput.begin(); ofClear(0); testInput.end();
+    
 }
 
 //--------------------------------------------------------------
 void ofApp::update(){
+//    testInput.begin();
+//    ofClear(0);
+//    ofPushMatrix();
+//    ofTranslate(mouseX, mouseY);
+//    ofRotateZRad(ofGetElapsedTimef());
+//    ofSetColor(255);
+//    ofSetRectMode(OF_RECTMODE_CENTER);
+//    ofDrawRectangle(0, 0, 400, 400);
+//    ofSetRectMode(OF_RECTMODE_CORNER);
+//    ofPopMatrix();
+//    testInput.end();
     
             // receive video stream
     video.update();
     if(video.isFrameNew()){
+                // vFps
         videoFps = 1./(ofGetElapsedTimef()-prevT);
         prevT =ofGetElapsedTimef();
+                // Feedback main
+        mainFeedback.update(video.getTexture());
+                // Small fbo for ghosts
         smallVideoFbo.begin();
         ofClear(0);
         ofPushMatrix();
         ofScale(scaleRatio.x, scaleRatio.y);
-        video.draw(0,0);
+        mainFeedback.dst.getTexture().draw(0,0);
         ofPopMatrix();
         smallVideoFbo.end();
+                // Very small fbo for cving
+        verySmallVideoFbo.begin();
+        ofClear(0);
+        ofPushMatrix();
+        ofScale(verySmallRatio.x, verySmallRatio.y);
+        mainFeedback.dst.getTexture().draw(0,0);
+        ofPopMatrix();
+        verySmallVideoFbo.end();
+        
+                // Cving
+        float ratio = diff.update(verySmallVideoFbo.getTexture());
+        colorRatio = ratio*100.f;
+        ghostCentroid = diff.centroid;
     }
+    
             // receive osc data
     oscReceive();
     if(colorRatio<0.1) bfeedBuffer = false;
@@ -81,41 +114,7 @@ void ofApp::update(){
             ghosts.erase(ghosts.begin()+i);
         }
     }
-    if(ghosts.size()<3) randomTrigger();
-    
-    
-    
-    
-    ofEnableBlendMode(OF_BLENDMODE_ADD);
-    ghostFbo.begin();
-    ofClear(0,255);
-    ofSetColor(0,255);
-    ofDrawRectangle(0,0,width,height);
-    video.getTexture().draw(1920,0);
-    if(ghosts.size()==0){
-        ghostShader.begin();
-        ghostShader.setUniform1f("count", ghosts.size());
-        ghostShader.setUniform2f("resolution", width, height);
-        ghostShader.setUniformTexture("mainframe", videoFbo.getTexture(),0);
-        plane.draw();
-        ghostShader.end();
-    }
-    else{
-        for(int i=0; i<ghosts.size(); ++i){
-            ghostShader.begin();
-            ghostShader.setUniform1f("count", ghosts.size());
-            ghostShader.setUniform2f("resolution", width, height);
-            ghostShader.setUniform2f("ghostpos", ghosts[i].pos);
-            ghostShader.setUniform1f("ghostlife", ghosts[i].lifeNormal);
-            ghostShader.setUniform1f("ghostsize", ghosts[i].ghostSize);
-            ghostShader.setUniformTexture("mainframe", videoFbo.getTexture(), 0);
-            ghostShader.setUniformTexture("ghosttex", ghosts[i].renderFrame, 1);
-            plane.draw();
-            ghostShader.end();
-        }
-    }
-    ofDisableBlendMode();
-    ghostFbo.end();
+    if(ghosts.size()<6) randomTrigger();
     
     record();
     loadFromPast();
@@ -127,21 +126,23 @@ void ofApp::update(){
         threadedLoadPrep.stop();
         bload=true;
     }
-    
-    
 }
 
 //--------------------------------------------------------------
 void ofApp::draw(){
-    
-    
-    ghostFbo.draw(0,0);
-    
-    if(testIdx<Ghost::pastLoadedFrames){
-        Ghost::pastFrames[testIdx].draw(0,0);
-        testIdx++;
-        testIdx = testIdx%Ghost::pastLoadedFrames;
+    ofEnableBlendMode(OF_BLENDMODE_ADD);
+    ofClear(0,255);
+    mainFeedback.dst.draw(1920,0);
+    for(int i=0; i<ghosts.size(); ++i){
+        ofPushMatrix();
+        ofTranslate(ghosts[i].pos.x*glm::vec2(width,height));
+        ofScale(1.f/ghosts[i].ghostSize);
+        ofSetColor(255*sin(ghosts[i].lifeNormal*PI));
+        ghosts[i].renderFrame.draw(0,0);
+        ofPopMatrix();
     }
+    ofDisableBlendMode();
+    
     
     
     if(debug){
@@ -157,6 +158,7 @@ void ofApp::draw(){
         ss << "Buf" << '\t' << (Ghost::isBufferFull?Ghost::globalFrames.size():Ghost::activeFrameCount) << '\n';
         ss << "Record" << '\t' << (brecord?"True":"False") << '\n';
         ss << "Load" << '\t' << (bload?"True":"False") << '\n';
+        ss << "Loaded" << '\t' << Ghost::pastLoadedFrames << '\n';
         ss << "lpThread" << '\t' <<threadedLoadPrep.isThreadRunning()<< '\n'<< '\n';
         ss << "ID" << '\t' << "life" << '\t' << "posX" << '\t' << "posY" << '\t' << "size" << '\n';
         
@@ -167,19 +169,25 @@ void ofApp::draw(){
             ss << ghosts[i].pos.x << '\t' << ghosts[i].pos.y << '\t';
             ss << ghosts[i].ghostSize<< '\n';
             
-            ofNoFill();
-            ofRectangle r;
-            r.set(
-                  width*ghosts[i].pos.x,
-                  height*ghosts[i].pos.y,
-                  1.f/ghosts[i].ghostSize*width/3,
-                  1.f/ghosts[i].ghostSize*height
-                  );
-            ofColor c = ofColor::fromHsb(ghosts[i].debugColor, 255,255);
-            ofSetColor(c);
-            ofDrawRectangle(r);
-            ofSetColor(255);
-            ofFill();
+            if(ghosts[i].fromPast){
+                ofNoFill();
+                ofRectangle r;
+                r.set(
+                      0,
+                      0,
+                      smallVideoSize.x,
+                      smallVideoSize.y
+                      );
+                ofColor c = ofColor::fromHsb(ghosts[i].debugColor, 255,255);
+                ofSetColor(c);
+                ofPushMatrix();
+                ofTranslate(ghosts[i].pos.x*glm::vec2(width,height));
+                ofScale(1.f/ghosts[i].ghostSize);
+                ofDrawRectangle(r);
+                ofPopMatrix();
+                ofSetColor(255);
+                ofFill();
+            }
         }
         
         
@@ -210,54 +218,9 @@ void ofApp::keyPressed(int key){
 }
 
 //--------------------------------------------------------------
-void ofApp::keyReleased(int key){
-
-}
-
-//--------------------------------------------------------------
-void ofApp::mouseMoved(int x, int y ){
-
-}
-
-//--------------------------------------------------------------
-void ofApp::mouseDragged(int x, int y, int button){
-
-}
-
-//--------------------------------------------------------------
-void ofApp::mousePressed(int x, int y, int button){
-
-}
-
-//--------------------------------------------------------------
-void ofApp::mouseReleased(int x, int y, int button){
-
-}
-
-//--------------------------------------------------------------
-void ofApp::mouseEntered(int x, int y){
-
-}
-
-//--------------------------------------------------------------
-void ofApp::mouseExited(int x, int y){
-
-}
-
-//--------------------------------------------------------------
 void ofApp::windowResized(int w, int h){
     width = w;
     height = h;
-}
-
-//--------------------------------------------------------------
-void ofApp::gotMessage(ofMessage msg){
-
-}
-
-//--------------------------------------------------------------
-void ofApp::dragEvent(ofDragInfo dragInfo){ 
-
 }
 //--------------------------------------------------------------
 int ofApp::getVideoDeviceByKeyword(ofVideoGrabber vid, string keyword, string second){
@@ -297,17 +260,6 @@ void ofApp::randomTrigger(){
 
 //--------------------------------------------------------------
 void ofApp::oscReceive(){
-        // from camera
-    while(vReceiver.hasWaitingMessages()){
-        ofxOscMessage m;
-        vReceiver.getNextMessage(m);
-        
-        if(m.getAddress()=="/mainData"){
-            colorRatio = m.getArgAsFloat(0);
-            ghostCentroid.x = m.getArgAsFloat(1);
-            ghostCentroid.y = m.getArgAsFloat(2);
-        }
-    }
         // from sound
     while(receiver.hasWaitingMessages()){
         ofxOscMessage m;
@@ -347,6 +299,8 @@ void ofApp::sendOsc(string addr, float v1, float v2, float v3, float v4, float v
     m.addFloatArg(v6);
     sender.sendMessage(m);
 }
+
+//--------------------------------------------------------------
 void ofApp::setRecord(int frameCount){
     recordFrameCount = frameCount;
     recorder.folderPath = "past/"+ofGetTimestampString("%Y_%m_%d_%H_%M_%S_%i")+"/";
@@ -373,6 +327,7 @@ void ofApp::setRecord(int frameCount){
     recorder.setFrame(1);
 }
 
+//--------------------------------------------------------------
 void ofApp::record(){
     if(brecord){
         recorder.save(Ghost::globalFrames[recordingFrameIdx]);
@@ -392,25 +347,26 @@ void ofApp::record(){
     }
 }
 
-
+//--------------------------------------------------------------
 void ofApp::loadFromPast(){
     if(bload){
         if(currentLoadFrameIdx<framesToLoad.size()){
-            ofImage tmp;
-            tmp.setUseTexture(true);
-            tmp.load(framesToLoad[currentLoadFrameIdx]);
-            tmp.update();
-            int modulatedFrameIdx = (Ghost::pastLoadedFrames+framesToLoad.size())%Ghost::pastBufferSize;
-            if(Ghost::pastLoadedFrames+framesToLoad.size() > modulatedFrameIdx){
-                Ghost::isPastBufferFull=true;
+            if(!thLoader.isThreadRunning()){
+                thLoader.loadFromDisk(loadingImg, framesToLoad[currentLoadFrameIdx]);
+                return;
+            }else{
+                int modulatedFrameIdx = (Ghost::pastLoadedFrames+framesToLoad.size())%Ghost::pastBufferSize;
+                if(Ghost::pastLoadedFrames+framesToLoad.size() > modulatedFrameIdx){
+                    Ghost::isPastBufferFull=true;
+                }
+                Ghost::pastFrames[(Ghost::pastLoadedFrames+currentLoadFrameIdx)%Ghost::pastBufferSize] = loadingImg.getTexture();
+                glm::vec2 tmpCentroid;
+                tmpCentroid.x = infoToLoad[currentLoadFrameIdx]["centroid"]["x"];
+                tmpCentroid.y = infoToLoad[currentLoadFrameIdx]["centroid"]["y"];
+                Ghost::pastCentroid[(Ghost::pastLoadedFrames+currentLoadFrameIdx)%Ghost::pastBufferSize] = tmpCentroid;
+                Ghost::pastColorRate[(Ghost::pastLoadedFrames+currentLoadFrameIdx)%Ghost::pastBufferSize] = infoToLoad[currentLoadFrameIdx]["cratio"];
+                currentLoadFrameIdx++;
             }
-            Ghost::pastFrames[(Ghost::pastLoadedFrames+currentLoadFrameIdx)%Ghost::pastBufferSize] = tmp.getTexture();
-            glm::vec2 tmpCentroid;
-            tmpCentroid.x = infoToLoad[currentLoadFrameIdx]["centroid"]["x"];
-            tmpCentroid.y = infoToLoad[currentLoadFrameIdx]["centroid"]["y"];
-            Ghost::pastCentroid[(Ghost::pastLoadedFrames+currentLoadFrameIdx)%Ghost::pastBufferSize] = tmpCentroid;
-            Ghost::pastColorRate[(Ghost::pastLoadedFrames+currentLoadFrameIdx)%Ghost::pastBufferSize] = infoToLoad[currentLoadFrameIdx]["cratio"];
-            currentLoadFrameIdx++;
         }else{
             Ghost::pastLoadedFrames += currentLoadFrameIdx;
             bload=false;

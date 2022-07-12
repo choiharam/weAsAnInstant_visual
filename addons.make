@@ -1,4 +1,7 @@
 ofxAutoReloadedShader
+ofxOpenCv
+ofxCv
 ofxOsc
 ofxPingPong
 ofxTextureRecorder
+ofxThreadedImageLoader

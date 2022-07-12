@@ -52,6 +52,6 @@ public:
     bool isDead=false;
     ofTexture renderFrame;
     float debugColor;
-    bool fromPast;
+    bool fromPast=false;
     
 };

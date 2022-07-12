@@ -4,7 +4,7 @@
 /*
         Initialize static members
  */
-int Ghost::bufferSize = 70000;
+int Ghost::bufferSize = 8000;
 int Ghost::pastBufferSize = 30000;
 ofTexture Ghost::sampleFrame = ofTexture();
 
@@ -82,7 +82,9 @@ void Ghost::setup(float w, float h, float size, float life){
     
     
         // decide past or current
-    if(ofRandomuf()>0.5){ // current
+    float decide = ofRandomuf();
+    if(Ghost::pastLoadedFrames<300) decide = 1;
+    if(decide>0.9){ // current
         fromPast = false;
         if(Ghost::isBufferFull){
             startPos = ofRandom(0, Ghost::bufferSize-lifespan);
@@ -115,7 +117,7 @@ GhostInfo Ghost::update(){
         if(!fromPast){
             renderFrame = Ghost::globalFrames[currentPos];
             currentPos = (currentPos+1)%Ghost::globalFrames.size();
-            lifeNormal = float(currentPos-startPos) / float(lifespan);
+            lifeNormal = glm::clamp(float(currentPos-startPos) / float(lifespan),0.f,1.f);
             // 1. size 2. lifespan, colorratio
             info.size = 1.f/ghostSize;
             info.lifespan = float(lifespan)/60.f;
