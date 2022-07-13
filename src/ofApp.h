@@ -37,7 +37,6 @@ class ofApp : public ofBaseApp{
         float width, height;
         ofVideoGrabber video;
         ofFbo smallVideoFbo;
-        ofFbo videoFbo;
         ofPlanePrimitive plane;
         ofxAutoReloadedShader ghostShader;
         Feedback mainFeedback;
@@ -60,8 +59,8 @@ class ofApp : public ofBaseApp{
     
             // Diff analysis
         Diff diff;
-    ofFbo verySmallVideoFbo;
-    glm::vec2 verySmallRatio;
+        ofFbo verySmallVideoFbo;
+        glm::vec2 verySmallRatio;
 
         
 
@@ -85,6 +84,15 @@ class ofApp : public ofBaseApp{
         ThreadedPrepare threadedLoadPrep;
         ofxThreadedImageLoader thLoader;
         ofImage loadingImg;
+    
+            // Auto record and load
+        void autoRecordLoad();
+        float lastRecordedHour;
+        float loadPrevTime;
+        float lastLoadedMin;
+        float loadInterval;
+#define recordMin 180
+#define recordMax 360
     
     
             // Testing vars

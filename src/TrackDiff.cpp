@@ -23,10 +23,12 @@ glm::vec2 Track::update(ofPixels source){
     contourFinder.findContours(source);
 
     poses.clear();
-    glm::vec2 centroid;
+    
     areaSum = 0;
     if(contourFinder.size()==1){
-        centroid = contourFinder.getCenter(0);
+        cv::Point2f cp = contourFinder.getCenter(0);
+        centroidBuffer.x = cp.x;
+        centroidBuffer.y = cp.y;
         areaSum = contourFinder.getContourArea(0);
     }
     else{
@@ -37,9 +39,11 @@ glm::vec2 Track::update(ofPixels source){
             tmp.addVertex(center.x, center.y);
             areaSum+= contourFinder.getContourArea(i);
         }
-        centroid = tmp.getCentroid2D;
+        centroidBuffer = tmp.getCentroid2D();
     }
     
+    centroid.x = ofLerp(centroid.x, centroidBuffer.x, 0.07);
+    centroid.y = ofLerp(centroid.y, centroidBuffer.y, 0.07);
     
     return centroid;
 
@@ -59,7 +63,7 @@ void Track::draw(){
         ofPushMatrix();
         ofTranslate(center.x, center.y);
         int label = i;
-        if(label> totalCount) totalCount = label;
+//        if(label> totalCount) totalCount = label;
         string msg = ofToString(label);
         ofDrawBitmapString(msg, 0, 0);
         ofVec2f velocity = toOf(contourFinder.getVelocity(i));
@@ -67,6 +71,11 @@ void Track::draw(){
         ofDrawLine(0, 0, velocity.x, velocity.y);
         ofPopMatrix();
     }
+    ofPushStyle();
+    ofSetColor(255,0,0);
+    ofDrawCircle(centroid, 5);
+    ofPopStyle();
+    
     
 }
 
@@ -90,11 +99,13 @@ float Diff::update(ofTexture tex){
         
     tex.readToPixels(rawpx);
     centroid = track.update(rawpx);
+    centroid.x /= rawpx.getWidth();
+    centroid.y /= rawpx.getHeight();
 
-    rawpx.setImageType(OF_IMAGE_GRAYSCALE);
-    absdiff(rawpx, bgPx, diffPx);
+//    rawpx.setImageType(OF_IMAGE_GRAYSCALE);
+//    absdiff(rawpx, bgPx, diffPx);
 
-    float ratio = count / track.areaSum;
+    float ratio = track.areaSum / (rawpx.getWidth()*rawpx.getHeight());
     colorRatio = ratio * 100.f;
 
     return colorRatio;

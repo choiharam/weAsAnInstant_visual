@@ -13,7 +13,8 @@ public:
     ofxCv::ContourFinder contourFinder;
     vector<glm::vec2> poses;
     float areaSum;
-    
+    glm::vec2 centroid;
+    glm::vec2 centroidBuffer;
 };
 
 

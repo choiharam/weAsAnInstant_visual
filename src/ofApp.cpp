@@ -52,17 +52,17 @@ void ofApp::setup(){
 
 //--------------------------------------------------------------
 void ofApp::update(){
-//    testInput.begin();
-//    ofClear(0);
-//    ofPushMatrix();
-//    ofTranslate(mouseX, mouseY);
-//    ofRotateZRad(ofGetElapsedTimef());
-//    ofSetColor(255);
-//    ofSetRectMode(OF_RECTMODE_CENTER);
-//    ofDrawRectangle(0, 0, 400, 400);
-//    ofSetRectMode(OF_RECTMODE_CORNER);
-//    ofPopMatrix();
-//    testInput.end();
+    testInput.begin();
+    ofClear(0);
+    ofPushMatrix();
+    ofTranslate(mouseX, mouseY);
+    ofRotateZRad(ofGetElapsedTimef());
+    ofSetColor(255);
+    ofSetRectMode(OF_RECTMODE_CENTER);
+    ofDrawRectangle(0, 0, 400, 400);
+    ofSetRectMode(OF_RECTMODE_CORNER);
+    ofPopMatrix();
+    testInput.end();
     
             // receive video stream
     video.update();
@@ -71,7 +71,7 @@ void ofApp::update(){
         videoFps = 1./(ofGetElapsedTimef()-prevT);
         prevT =ofGetElapsedTimef();
                 // Feedback main
-        mainFeedback.update(video.getTexture());
+        mainFeedback.update(testInput.getTexture());
                 // Small fbo for ghosts
         smallVideoFbo.begin();
         ofClear(0);
@@ -90,8 +90,7 @@ void ofApp::update(){
         verySmallVideoFbo.end();
         
                 // Cving
-        float ratio = diff.update(verySmallVideoFbo.getTexture());
-        colorRatio = ratio*100.f;
+        colorRatio = diff.update(verySmallVideoFbo.getTexture());
         ghostCentroid = diff.centroid;
     }
     
@@ -109,13 +108,14 @@ void ofApp::update(){
             // send osc to sound
     for(int i=0; i<ghosts.size(); ++i){
         GhostInfo ghostInfo = ghosts[i].update();
-        sendOsc("/ghostInfo", i, ghostInfo.size, ghostInfo.lifespan, ghostInfo.colorRate, ghostInfo.centroid.x, ghostInfo.centroid.y);
+//        sendOsc("/ghostInfo", i, ghostInfo.size, ghostInfo.lifespan, ghostInfo.colorRate, ghostInfo.centroid.x, ghostInfo.centroid.y);
         if(ghosts[i].isDead){
             ghosts.erase(ghosts.begin()+i);
         }
     }
-    if(ghosts.size()<6) randomTrigger();
     
+        // Record and Load
+    autoRecordLoad();
     record();
     loadFromPast();
     
@@ -135,14 +135,13 @@ void ofApp::draw(){
     mainFeedback.dst.draw(1920,0);
     for(int i=0; i<ghosts.size(); ++i){
         ofPushMatrix();
-        ofTranslate(ghosts[i].pos.x*glm::vec2(width,height));
+        ofTranslate(ghosts[i].pos*glm::vec2(width,height));
         ofScale(1.f/ghosts[i].ghostSize);
         ofSetColor(255*sin(ghosts[i].lifeNormal*PI));
         ghosts[i].renderFrame.draw(0,0);
         ofPopMatrix();
     }
     ofDisableBlendMode();
-    
     
     
     if(debug){
@@ -153,6 +152,7 @@ void ofApp::draw(){
         ss << "screen" << '\t' << ofGetWidth() << "," << ofGetHeight() << '\n';
         ss << "video" << '\t' << video.getWidth() << video.getHeight() << '\n';
         ss << "cRatio" << '\t' << colorRatio << '\n';
+        ss << "centro" << '\t' << ghostCentroid << '\n';
         ss << "count" << '\t' << ghosts.size() << '\n';
         ss << "gFrame" << '\t' << ofGetFrameNum() << '\n';
         ss << "Buf" << '\t' << (Ghost::isBufferFull?Ghost::globalFrames.size():Ghost::activeFrameCount) << '\n';
@@ -169,32 +169,9 @@ void ofApp::draw(){
             ss << ghosts[i].pos.x << '\t' << ghosts[i].pos.y << '\t';
             ss << ghosts[i].ghostSize<< '\n';
             
-            if(ghosts[i].fromPast){
-                ofNoFill();
-                ofRectangle r;
-                r.set(
-                      0,
-                      0,
-                      smallVideoSize.x,
-                      smallVideoSize.y
-                      );
-                ofColor c = ofColor::fromHsb(ghosts[i].debugColor, 255,255);
-                ofSetColor(c);
-                ofPushMatrix();
-                ofTranslate(ghosts[i].pos.x*glm::vec2(width,height));
-                ofScale(1.f/ghosts[i].ghostSize);
-                ofDrawRectangle(r);
-                ofPopMatrix();
-                ofSetColor(255);
-                ofFill();
-            }
         }
-        
-        
-        ofDrawBitmapStringHighlight(ss.str(), 30,30);
-        
+        ofDrawBitmapString(ss.str(), 30,30);
     }
-    
 }
 
 //--------------------------------------------------------------
@@ -266,10 +243,13 @@ void ofApp::oscReceive(){
         receiver.getNextMessage(m);
         
         if(m.getAddress()=="/ghostTrigger"){
-            float lifespan;
-            float size;
+            float lifespan = m.getArgAsFloat(1);
+            float size = m.getArgAsFloat(2);
+            float pan = m.getArgAsFloat(3);
             Ghost g;
             g.setup(smallVideoSize.x, smallVideoSize.y, size, lifespan);
+            g.pos.x = pan;
+            g.pos.y = 0;
             ghosts.push_back(g);
         }
     }
@@ -372,4 +352,24 @@ void ofApp::loadFromPast(){
             bload=false;
         }
     }
+}
+
+//--------------------------------------------------------------
+void ofApp::autoRecordLoad(){
+        // Auto record in every hour
+    int h = ofGetHours();
+    if(h != lastRecordedHour){
+        setRecord(ofRandom(recordMin, recordMax));
+        lastRecordedHour = h;
+    }
+    
+        // Auto Load in every #15 minutes
+    
+    int m = ofGetMinutes();
+    if(abs(m - lastLoadedMin)>15){
+        threadedLoadPrep.setup();
+        threadedLoadPrep.update();
+        lastLoadedMin = m;
+    }
+    
 }

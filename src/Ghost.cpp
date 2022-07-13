@@ -73,9 +73,11 @@ void Ghost::setup(float w, float h, float size, float life){
     
     if(size==-1) ghostSize = ofRandom(gSizeMin, gSizeMax);
     else ghostSize = size;
-    pos.x = ofRandom(0,(3.f-(1.f/ghostSize))/3.f);
-    pos.y = ofRandom(0,(3.f-(1.f/ghostSize))/3.f);
-    
+//    pos.x = ofRandom(0,(3.f-(1.f/ghostSize))/3.f);
+//    pos.y = ofRandom(0,(3.f-(1.f/ghostSize))/3.f);
+    /*
+        (3.f-(1.f/ghostSize))/3.f
+    */
     Ghost::globalGhostCount++;
     if(life==-1) lifespan = ofRandom(0, 600) + 360;
     else lifespan = life*60.f;
